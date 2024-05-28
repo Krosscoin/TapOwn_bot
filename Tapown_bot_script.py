@@ -1,187 +1,178 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-import random
 import asyncio
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from datetime import datetime, timedelta
+import json
+import random
 
-# Set up logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# Setup logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Replace with your actual bot token
-TOKEN = '6609411086:AAE7wGvmSqwY1fSLPNo85wgNddD8CDW9wc8'
-
-# In-memory data storage (replace with a persistent database in production)
-user_data = {}
-global_stats = {
-    'total_balance': 0,
+# Global Variables
+users = {}
+tasks = {}
+leaderboard = []
+missions = {}
+referrals = {}
+stats = {
+    'total_share_balance': 0,
     'total_touches': 0,
     'total_players': 0,
-    'daily_users': set(),
-    'online_users': set()
+    'daily_users': 0,
+    'online_players': 0
 }
 
-# Start command handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# Read the Telegram token from the environment variable
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+# Load users data from file
+def load_users():
+    global users
+    if os.path.exists('users.json'):
+        with open('users.json', 'r') as file:
+            users = json.load(file)
+
+# Save users data to file
+def save_users():
+    with open('users.json', 'w') as file:
+        json.dump(users, file)
+
+# Command handlers
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id not in user_data:
-        user_data[user.id] = {'balance': 0, 'referrals': 0, 'last_active': datetime.now()}
-        global_stats['total_players'] += 1
-    await update.message.reply_text(
-        f"Hi {user.first_name}! Welcome to TapOwn! Tap on the coin to earn OWN tokens. Use /tap to start tapping.",
-        reply_markup=main_menu_keyboard()
-    )
+    chat_id = update.effective_chat.id
+    referral_code = context.args[0] if context.args else None
 
-# Tap command handler
-async def tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    if user.id not in user_data:
-        user_data[user.id] = {'balance': 0, 'referrals': 0, 'last_active': datetime.now()}
-        global_stats['total_players'] += 1
+    if user.id not in users:
+        users[user.id] = {
+            'username': user.username,
+            'balance': 0,
+            'touches': 0,
+            'last_active': datetime.now().isoformat(),
+            'boost_last_played': None,
+            'referrals': 0
+        }
+        stats['total_players'] += 1
 
-    taps = random.randint(1, 10)
-    user_data[user.id]['balance'] += taps
-    user_data[user.id]['last_active'] = datetime.now()
+        if referral_code and referral_code in users:
+            users[referral_code]['referrals'] += 1
+            reward_referral(users[referral_code])
 
-    global_stats['total_balance'] += taps
-    global_stats['total_touches'] += taps
-    global_stats['daily_users'].add(user.id)
-    global_stats['online_users'].add(user.id)
+        save_users()
 
-    await update.message.reply_text(
-        f"{user.first_name}, you tapped the coin! Your new balance is {user_data[user.id]['balance']} OWN tokens.",
-        reply_markup=main_menu_keyboard()
-    )
+    referral_link = f"https://t.me/tapown_bot?start={user.username}"
 
-# Balance command handler
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    balance = user_data.get(user.id, {'balance': 0})['balance']
-    await update.message.reply_text(
-        f"{user.first_name}, your current balance is {balance} OWN tokens.",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Leaderboard command handler
-async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global leaderboard
-    leaderboard = sorted(user_data.items(), key=lambda x: x[1]['balance'], reverse=True)[:10]
-    leaderboard_text = "\n".join([f"{context.bot.get_chat(uid).first_name}: {data['balance']} OWN" for uid, data in leaderboard])
-    await update.message.reply_text(
-        f"🏆 Leaderboard 🏆\n\n{leaderboard_text}",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Events command handler
-async def events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Stay tuned for upcoming events! 🎉",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Referral command handler
-async def refer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    referral_code = f"{user.id}"
-    await update.message.reply_text(
-        f"Invite friends using your referral code: {referral_code}. More friends, more coins!",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Kross Shield registration command handler
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Register your username with the Kross Shield bot by interacting with it here: [Kross Shield Bot](https://t.me/krosscoinbot).",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Boost command handler
-async def boost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    boost_amount = boosts.get(user.id, 1) * 2
-    boosts[user.id] = boost_amount
-    await update.message.reply_text(
-        f"Boost activated! Your tapping rewards are now multiplied by {boost_amount}.",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Stats command handler
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    current_time = datetime.now()
-    global_stats['daily_users'] = {uid for uid in global_stats['daily_users'] if user_data[uid]['last_active'] >= current_time - timedelta(days=1)}
-    global_stats['online_users'] = {uid for uid in global_stats['online_users'] if user_data[uid]['last_active'] >= current_time - timedelta(minutes=5)}
-
-    total_balance = global_stats['total_balance']
-    total_touches = global_stats['total_touches']
-    total_players = global_stats['total_players']
-    daily_users = len(global_stats['daily_users'])
-    online_users = len(global_stats['online_users'])
-
-    await update.message.reply_text(
-        f"🌐 Global Stats 🌐\n\nTotal Share Balance: {total_balance} OWN\nTotal Touches: {total_touches}\nTotal Players: {total_players}\nDaily Users: {daily_users}\nOnline Players: {online_users}",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Main menu keyboard
-def main_menu_keyboard():
     keyboard = [
         [InlineKeyboardButton("Tap", callback_data='tap')],
-        [InlineKeyboardButton("Balance", callback_data='balance')],
         [InlineKeyboardButton("Leaderboard", callback_data='leaderboard')],
-        [InlineKeyboardButton("Events", callback_data='events')],
-        [InlineKeyboardButton("Refer Friends", callback_data='refer')],
-        [InlineKeyboardButton("Register", callback_data='register')],
+        [InlineKeyboardButton("Tasks", callback_data='tasks')],
+        [InlineKeyboardButton("Stats", callback_data='stats')],
         [InlineKeyboardButton("Boost", callback_data='boost')],
-        [InlineKeyboardButton("Stats", callback_data='stats')]
+        [InlineKeyboardButton("Missions", callback_data='missions')],
+        [InlineKeyboardButton("Referral Link", url=referral_link)],
+        [InlineKeyboardButton("Register", callback_data='register')]
     ]
-    return InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-# Callback query handler
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn! Start tapping and earn OWN tokens!", reply_markup=reply_markup)
+
+def reward_referral(referrer):
+    referral_rewards = {
+        1: 5000,
+        5: 35000,
+        10: 100000,
+        50: 500000,
+        100: 1500000
+    }
+    for count, reward in referral_rewards.items():
+        if referrer['referrals'] == count:
+            referrer['balance'] += reward
+            break
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user = update.effective_user
+
     await query.answer()
 
-    data = query.data
-    if data == 'tap':
-        await tap(update, context)
-    elif data == 'balance':
-        await balance(update, context)
-    elif data == 'leaderboard':
-        await leaderboard(update, context)
-    elif data == 'events':
-        await events(update, context)
-    elif data == 'refer':
-        await refer(update, context)
-    elif data == 'register':
-        await register(update, context)
-    elif data == 'boost':
-        await boost(update, context)
-    elif data == 'stats':
-        await stats(update, context)
+    if query.data == 'tap':
+        users[user.id]['touches'] += 1
+        users[user.id]['balance'] += 1  # Increase balance by 1 OWN token per tap
+        users[user.id]['last_active'] = datetime.now().isoformat()
+        stats['total_touches'] += 1
+        stats['total_share_balance'] += 1
 
-# Main function to start the bot
-def main() -> None:
-    application = Application.builder().token(TOKEN).build()
+        save_users()
 
-    # Register command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("tap", tap))
-    application.add_handler(CommandHandler("balance", balance))
-    application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler("events", events))
-    application.add_handler(CommandHandler("refer", refer))
-    application.add_handler(CommandHandler("register", register))
-    application.add_handler(CommandHandler("boost", boost))
-    application.add_handler(CommandHandler("stats", stats))
+        await query.edit_message_text(text=f"You tapped! Your balance: {users[user.id]['balance']} OWN tokens.")
+    elif query.data == 'leaderboard':
+        leaderboard_text = "🏆 Leaderboard 🏆\n\n"
+        sorted_users = sorted(users.items(), key=lambda x: x[1]['balance'], reverse=True)
+        for i, (user_id, data) in enumerate(sorted_users[:50], start=1):
+            leaderboard_text += f"{i}. {data['username']}: {data['balance']} OWN tokens\n"
+        await query.edit_message_text(text=leaderboard_text)
+    elif query.data == 'tasks':
+        tasks_text = "📋 Tasks 📋\n\nRefer friends using your referral link to earn more OWN tokens.\n"
+        tasks_text += "Refer 1 Friend, get 5000 OWN tokens\n"
+        tasks_text += "Refer 5 Friends, get 35000 OWN tokens\n"
+        tasks_text += "Refer 10 Friends, get 100000 OWN tokens\n"
+        tasks_text += "Refer 50 Friends, get 500000 OWN tokens\n"
+        tasks_text += "Refer 100 Friends, get 1500000 OWN tokens\n"
+        await query.edit_message_text(text=tasks_text)
+    elif query.data == 'stats':
+        stats_text = (
+            f"📊 Global Stats 📊\n\n"
+            f"Total Share Balance: {stats['total_share_balance']} OWN tokens\n"
+            f"Total Touches: {stats['total_touches']}\n"
+            f"Total Players: {stats['total_players']}\n"
+            f"Daily Users: {stats['daily_users']}\n"
+            f"Online Players: {stats['online_players']}\n"
+        )
+        await query.edit_message_text(text=stats_text)
+    elif query.data == 'boost':
+        if 'boost_last_played' not in users[user.id] or \
+           datetime.strptime(users[user.id]['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
+            users[user.id]['boost_last_played'] = datetime.today().isoformat()
+            guess = random.randint(1, 10)
+            keyboard = [[InlineKeyboardButton(str(i), callback_data=f'boost_{i}') for i in range(1, 11)]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text="🔋 Boost Page 🔋\nGuess a number between 1 and 10 to win 300000 OWN tokens.", reply_markup=reply_markup)
+        else:
+            await query.edit_message_text(text="🔋 Boost Page 🔋\nYou can only play the Boost game once a day.")
+    elif query.data.startswith('boost_'):
+        number = int(query.data.split('_')[1])
+        correct_number = random.randint(1, 10)
+        if number == correct_number:
+            users[user.id]['balance'] += 300000
+            save_users()
+            await query.edit_message_text(text="Congratulations! You guessed the right number and won 300000 OWN tokens.")
+        else:
+            await query.edit_message_text(text="Sorry, you guessed wrong. Try again tomorrow.")
+    elif query.data == 'missions':
+        missions_text = "🎉 Missions 🎉\n\nComplete the missions to earn additional rewards:\n"
+        missions_text += "1. Join Our TapOwn Community, Reward: 10000 OWN tokens\n"
+        missions_text += "2. Join the Kross Blockchain Community, Reward: 15000 OWN tokens\n"
+        missions_text += "3. Join the Hashgreed Community, Reward: 15000 OWN tokens\n"
+        missions_text += "4. Join Kross Blockchain on X, Reward: 75000 OWN tokens\n"
+        missions_text += "5. Join Hashgreed on X, Reward: 75000 OWN tokens\n"
+        keyboard = [
+            [InlineKeyboardButton("Join TapOwn", url="https://t.me/tapownai"), InlineKeyboardButton("Check", callback_data='check_tapown')],
+            [InlineKeyboardButton("Join Kross Blockchain", url="https://t.me/krosscoin_kss"), InlineKeyboardButton("Check", callback_data='check_kross')],
+            [InlineKeyboardButton("Join Hashgreed", url="https://t.me/hashgreedroyals"), InlineKeyboardButton("Check", callback_data='check_hashgreed')],
+            [InlineKeyboardButton("Join Kross Blockchain on X", url="https://x.com/krosscoin_team"), InlineKeyboardButton("Check", callback_data='check_kross_x')],
+            [InlineKeyboardButton("Join Hashgreed on X", url="https://x.com/hashgreed"), InlineKeyboardButton("Check", callback_data='check_hashgreed_x')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=missions_text, reply_markup=reply_markup)
+    elif query.data == 'register':
+        await query.edit_message_text(
+            text="To register your Kross Wallet, please follow these steps:\n\n1. Go to the Kross Shield bot: [Kross Shield Bot](https://t.me/krosscoinbot)\n2. Interact with the bot using the /myaddress command.\n3. Make sure to register with the same Telegram username."
+        )
+    elif query.data.startswith('check_'):
+        mission = query.data.split('_')[1]
+        # You need to implement the logic to check if the user is a member of the specified community.
+        #
 
-    # Register callback query handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button))
-
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
