@@ -173,6 +173,29 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif query.data.startswith('check_'):
         mission = query.data.split('_')[1]
-        # You need to implement the logic to check if the user is a member of the specified community.
-        #
+        is_member = True  # This should be replaced with actual membership checking logic.
+        if is_member:
+            rewards = {
+                'tapown': 10000,
+                'kross': 15000,
+                'hashgreed': 15000,
+                'kross_x': 75000,
+                'hashgreed_x': 75000
+            }
+            users[user.id]['balance'] += rewards[mission]
+            save_users()
+            await query.edit_message_text(text=f"Mission Accomplished! You have been rewarded {rewards[mission]} OWN tokens.")
+        else:
+            await query.edit_message_text(text="Mission not done yet, kindly attempt to join.")
 
+async def main():
+    load_users()
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+
+    await application.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
