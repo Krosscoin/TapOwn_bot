@@ -1,3 +1,4 @@
+
 import logging
 import asyncio
 import os
@@ -77,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn By Kross Blockchain! Start tapping and earn OWN tokens for later swapping to RWA tokens!", reply_markup=reply_markup)
+    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn! Start tapping and earn OWN tokens!", reply_markup=reply_markup)
 
 def reward_referral(referrer):
     referral_rewards = {
@@ -173,6 +174,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif query.data.startswith('check_'):
         mission = query.data.split('_')[1]
+         # You need to implement the logic to check if the user is a member of the specified community.
+        # For now, let's assume the check is successful for demonstration purposes.
         is_member = True  # This should be replaced with actual membership checking logic.
         if is_member:
             rewards = {
@@ -195,7 +198,16 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    await application.run_polling()
+    # Use this workaround to manage the event loop correctly
+    await application.initialize()
+    try:
+        await application.start()
+        await application.updater.start_polling()
+        await application.updater.idle()
+    finally:
+        await application.stop()
+        await application.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())
+
