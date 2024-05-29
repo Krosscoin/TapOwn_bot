@@ -1,15 +1,18 @@
 import logging
-import asyncio
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-from datetime import datetime, timedelta
+import asyncio
+from datetime import datetime
 import json
 import random
 
 # Setup logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname=s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Read the Telegram token from the environment variable
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # Global Variables
 users = {}
@@ -24,9 +27,6 @@ stats = {
     'daily_users': 0,
     'online_players': 0
 }
-
-# Read the Telegram token from the environment variable
-TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # Load users data from file
 def load_users():
@@ -156,14 +156,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         missions_text += "1. Join Our TapOwn Community, Reward: 10000 OWN tokens\n"
         missions_text += "2. Join the Kross Blockchain Community, Reward: 15000 OWN tokens\n"
         missions_text += "3. Join the Hashgreed Community, Reward: 15000 OWN tokens\n"
-        missions_text += "4. Join Kross Blockchain on X, Reward: 75000 OWN tokens\n"
-        missions_text += "5. Join Hashgreed on X, Reward: 75000 OWN tokens\n"
         keyboard = [
             [InlineKeyboardButton("Join TapOwn", url="https://t.me/tapownai"), InlineKeyboardButton("Check", callback_data='check_tapown')],
             [InlineKeyboardButton("Join Kross Blockchain", url="https://t.me/krosscoin_kss"), InlineKeyboardButton("Check", callback_data='check_kross')],
-            [InlineKeyboardButton("Join Hashgreed", url="https://t.me/hashgreedroyals"), InlineKeyboardButton("Check", callback_data='check_hashgreed')],
-            [InlineKeyboardButton("Join Kross Blockchain on X", url="https://x.com/krosscoin_team"), InlineKeyboardButton("Check", callback_data='check_kross_x')],
-            [InlineKeyboardButton("Join Hashgreed on X", url="https://x.com/hashgreed"), InlineKeyboardButton("Check", callback_data='check_hashgreed_x')]
+            [InlineKeyboardButton("Join Hashgreed", url="https://t.me/hashgreedroyals"), InlineKeyboardButton("Check", callback_data='check_hashgreed')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text=missions_text, reply_markup=reply_markup)
@@ -175,14 +171,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mission = query.data.split('_')[1]
         # You need to implement the logic to check if the user is a member of the specified community.
         # For now, let's assume the check is successful for demonstration purposes.
-                is_member = True  # This should be replaced with actual membership checking logic.
+        is_member = True  # This should be replaced with actual membership checking logic.
         if is_member:
             rewards = {
                 'tapown': 10000,
                 'kross': 15000,
-                'hashgreed': 15000,
-                'kross_x': 75000,
-                'hashgreed_x': 75000
+                'hashgreed': 15000
             }
             users[user.id]['balance'] += rewards[mission]
             save_users()
@@ -190,20 +184,30 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text(text="Mission not done yet, kindly attempt to join.")
 
-async def main():
-    load_users()
+async def run_bot():
     application = ApplicationBuilder().token(TOKEN).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button))
 
-    # Use this workaround to manage the event loop correctly
-    async with application:
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling()
-        await application.updater.idle()
+    await application.run_polling()
+
+def main():
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Create a new task for the bot if the event loop is already running
+            asyncio.ensure_future(run_bot())
+        else:
+            # Use asyncio.run if no event loop is running
+            asyncio.run(run_bot())
+    except RuntimeError as e:
+        if str(e) == "This event loop is already running":
+            logger.error("Event loop is already running")
+            loop = asyncio.get_event_loop()
+            loop.create_task(run_bot())
+            loop.run_forever()
+        else:
+            raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    main()
