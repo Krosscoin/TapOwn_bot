@@ -1,4 +1,3 @@
-
 import logging
 import asyncio
 import os
@@ -9,7 +8,7 @@ import json
 import random
 
 # Setup logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname=s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global Variables
@@ -78,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn By Kross Blockchain! Start tapping and earn OWN tokens which you'll swap for SEC registered RWA tokens on Hashgreed! OWN your World", reply_markup=reply_markup)
+    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn By Kross Blockchain! Start tapping and earning OWN tokens which you'll swap for SEC registered RWA tokens on Hashgreed! OWN your World", reply_markup=reply_markup)
 
 def reward_referral(referrer):
     referral_rewards = {
@@ -174,9 +173,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif query.data.startswith('check_'):
         mission = query.data.split('_')[1]
-         # You need to implement the logic to check if the user is a member of the specified community.
+        # You need to implement the logic to check if the user is a member of the specified community.
         # For now, let's assume the check is successful for demonstration purposes.
-        is_member = True  # This should be replaced with actual membership checking logic.
+                is_member = True  # This should be replaced with actual membership checking logic.
         if is_member:
             rewards = {
                 'tapown': 10000,
@@ -199,14 +198,11 @@ async def main():
     application.add_handler(CallbackQueryHandler(button))
 
     # Use this workaround to manage the event loop correctly
-    await application.initialize()
-    try:
+    async with application:
+        await application.initialize()
         await application.start()
         await application.updater.start_polling()
         await application.updater.idle()
-    finally:
-        await application.stop()
-        await application.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())
