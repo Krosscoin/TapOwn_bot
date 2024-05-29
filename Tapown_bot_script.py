@@ -207,7 +207,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text=stats_text)
     elif query.data == 'boost':
         if not existing_user['boost_last_played'] or \
-           datetime.strptime(existing_user['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
+                      datetime.strptime(existing_user['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
             existing_user['boost_last_played'] = datetime.today().isoformat()
             save_user(existing_user)
             keyboard = [[InlineKeyboardButton(str(i), callback_data=f'boost_{i}')] for i in range(1, 11)]
@@ -317,8 +317,8 @@ def main():
             asyncio.ensure_future(run_bot())
             asyncio.ensure_future(check_missions())
         else:
-            asyncio.run(run_bot())
-            asyncio.run(check_missions())
+            loop.run_until_complete(run_bot())
+            loop.run_until_complete(check_missions())
     except RuntimeError as e:
         if str(e) == "This event loop is already running":
             logger.error("Event loop is already running")
