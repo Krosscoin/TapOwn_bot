@@ -78,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn! Start tapping and earn OWN tokens!", reply_markup=reply_markup)
+    await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn By Kross Blockchain! Start tapping and earn OWN tokens which you'll swap for SEC registered RWA tokens on Hashgreed! OWN your World", reply_markup=reply_markup)
 
 def reward_referral(referrer):
     referral_rewards = {
