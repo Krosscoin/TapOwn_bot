@@ -1,12 +1,12 @@
 import logging
 import os
+import random
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+import sqlite3
 import asyncio
 import nest_asyncio
-from datetime import datetime, timedelta
-import sqlite3
-import random
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -98,7 +98,7 @@ def update_stats():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
-    referral_code = context.args[0] if context.args else None
+    referrer_username = context.args[0] if context.args else None
 
     existing_user = load_user(user.id)
     if not existing_user:
@@ -114,22 +114,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_user(new_user)
         existing_user = new_user
 
-        if referral_code:
-            referrer = load_user(referral_code)
+        if referrer_username:
+            cursor.execute('SELECT * FROM users WHERE username = ?', (referrer_username,))
+            referrer = cursor.fetchone()
             if referrer:
-                referrer['referrals'] += 1
-                reward_referral(referrer)
-                save_user(referrer)
+                referrer_id = referrer[0]
+                referrer_user = load_user(referrer_id)
+                referrer_user['referrals'] += 1
+                reward_referral(referrer_user)
+                save_user(referrer_user)
+                existing_user['balance'] += 25000
+                referrer_user['balance'] += 25000
+                save_user(referrer_user)
 
     referral_link = f"https://t.me/tapown_bot?start={user.username}"
 
     keyboard = [
         [InlineKeyboardButton("Tap", callback_data='tap')],
         [InlineKeyboardButton("Leaderboard", callback_data='leaderboard')],
-        [InlineKeyboardButton("Tasks", callback_data='tasks')],
+        [InlineKeyboardButton("Missions", callback_data='missions')],
         [InlineKeyboardButton("Stats", callback_data='stats')],
         [InlineKeyboardButton("Boost", callback_data='boost')],
-        [InlineKeyboardButton("Missions", callback_data='missions')],
         [InlineKeyboardButton("Referral Link", url=referral_link)],
         [InlineKeyboardButton("Register", callback_data='register')]
     ]
@@ -138,17 +143,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text="Welcome to TapOwn By Kross Blockchain! Start tapping and earning OWN tokens which you'll swap for SEC registered RWA tokens on Hashgreed! OWN your World", reply_markup=reply_markup)
 
 def reward_referral(referrer):
-    referral_rewards = {
-        1: 5000,
-        5: 35000,
-        10: 100000,
-        50: 500000,
-        100: 1500000
-    }
-    for count, reward in referral_rewards.items():
-        if referrer['referrals'] == count:
-            referrer['balance'] += reward
-            break
+    referrer['balance'] += 25000
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -163,12 +158,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == 'tap':
         existing_user['touches'] += 1
-        existing_user['balance'] += 1  # Increase balance by 1 OWN token per tap
+        reward = random.randint(1, 10)
+        existing_user['balance'] += reward
         existing_user['last_active'] = datetime.now().isoformat()
         save_user(existing_user)
         update_stats()
 
-        await query.edit_message_text(text=f"You tapped! Your balance: {existing_user['balance']} OWN tokens.")
+        await query.edit_message_text(text=f"You tapped! Your balance: {existing_user['balance']} OWN tokens. You earned {reward} OWN tokens.")
     elif query.data == 'leaderboard':
         leaderboard_text = "🏆 Leaderboard 🏆\n\n"
         cursor.execute('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 50')
@@ -176,14 +172,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, user in enumerate(top_users, start=1):
             leaderboard_text += f"{i}. {user[0]}: {user[1]} OWN tokens\n"
         await query.edit_message_text(text=leaderboard_text)
-    elif query.data == 'tasks':
-        tasks_text = "📋 Tasks 📋\n\nRefer friends using your referral link to earn more OWN tokens.\n"
-        tasks_text += "Refer 1 Friend, get 5000 OWN tokens\n"
-        tasks_text += "Refer 5 Friends, get 35000 OWN tokens\n"
-        tasks_text += "Refer 10 Friends, get 100000 OWN tokens\n"
-        tasks_text += "Refer 50 Friends, get 500000 OWN tokens\n"
-        tasks_text += "Refer 100 Friends, get 1500000 OWN tokens\n"
-        await query.edit_message_text(text=tasks_text)
+    elif query.data == 'missions':
+        missions_text = "🎉 Missions 🎉\n\nComplete the missions to earn additional rewards:\n"
+        missions_text += "1. Join TapOwn Community on Telegram, Reward: 15000 OWN tokens\n"
+        missions_text += "2. Join the Kross Blockchain Community on Telegram, Reward: 15000 OWN tokens\n"
+        missions_text += "3. Join the Hashgreed Community on Telegram, Reward: 15000 OWN tokens\n"
+        missions_text += "4. Join the BUCCON Community on Telegram, Reward: 15000 OWN tokens\n"
+        keyboard = [
+            [InlineKeyboardButton("Join TapOwn", url="https://t.me/tapownai"), InlineKeyboardButton("Check", callback_data='check_tapown')],
+            [InlineKeyboardButton("Join Kross Blockchain", url="https://t.me/krosscoin_kss"), InlineKeyboardButton("Check", callback_data='check_kross')],
+            [InlineKeyboardButton("Join Hashgreed", url="https://t.me/hashgreedroyals"), InlineKeyboardButton("Check", callback_data='check_hashgreed')],
+            [InlineKeyboardButton("Join BUCCON", url="https://t.me/buccon"), InlineKeyboardButton("Check", callback_data='check_buccon')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=missions_text, reply_markup=reply_markup)
     elif query.data == 'stats':
         cursor.execute('SELECT value FROM stats WHERE key = "total_share_balance"')
         total_share_balance = cursor.fetchone()[0]
@@ -199,7 +201,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats_text = (
             f"📊 Global Stats 📊\n\n"
             f"Total Share Balance: {total_share_balance} OWN tokens\n"
-            f"Total Touches: {total_touches}\n"
+                        f"Total Touches: {total_touches}\n"
             f"Total Players: {total_players}\n"
             f"Daily Users: {daily_users}\n"
             f"Online Players: {online_players}\n"
@@ -207,7 +209,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text=stats_text)
     elif query.data == 'boost':
         if not existing_user['boost_last_played'] or \
-                      datetime.strptime(existing_user['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
+           datetime.strptime(existing_user['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
             existing_user['boost_last_played'] = datetime.today().isoformat()
             save_user(existing_user)
             keyboard = [[InlineKeyboardButton(str(i), callback_data=f'boost_{i}')] for i in range(1, 11)]
@@ -225,50 +227,22 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text="Congratulations! You guessed the right number and won 300000 OWN tokens.")
         else:
             await query.edit_message_text(text="Sorry, you guessed wrong. Try again tomorrow.")
-    elif query.data == 'missions':
-        missions_text = "🎉 Missions 🎉\n\nComplete the missions to earn additional rewards:\n"
-        missions_text += "1. Join Our TapOwn Community, Reward: 10000 OWN tokens\n"
-        missions_text += "2. Join the Kross Blockchain Community, Reward: 15000 OWN tokens\n"
-        missions_text += "3. Join the Hashgreed Community, Reward: 15000 OWN tokens\n"
-        missions_text += "4. Join Kross Blockchain on X, Reward: 75000 OWN tokens\n"
-        missions_text += "5. Join Hashgreed on X, Reward: 75000 OWN tokens\n"
-        keyboard = [
-            [InlineKeyboardButton("Join TapOwn", url="https://t.me/tapownai"), InlineKeyboardButton("Check", callback_data='check_tapown')],
-            [InlineKeyboardButton("Join Kross Blockchain", url="https://t.me/krosscoin_kss"), InlineKeyboardButton("Check", callback_data='check_kross')],
-            [InlineKeyboardButton("Join Hashgreed", url="https://t.me/hashgreedroyals"), InlineKeyboardButton("Check", callback_data='check_hashgreed')],
-            [InlineKeyboardButton("Join Kross Blockchain on X", url="https://x.com/krosscoin_team"), InlineKeyboardButton("Check", callback_data='check_x_kross')],
-            [InlineKeyboardButton("Join Hashgreed on X", url="https://x.com/hashgreed"), InlineKeyboardButton("Check", callback_data='check_x_hashgreed')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=missions_text, reply_markup=reply_markup)
-    elif query.data == 'register':
-        await query.edit_message_text(
-            text="To register your Kross Wallet, please follow these steps:\n\n1. Go to the Kross Shield bot: [Kross Shield Bot](https://t.me/krosscoinbot)\n2. Interact with the bot using the /myaddress command.\n3. Make sure to register with the same Telegram username."
-        )
     elif query.data.startswith('check_'):
         mission = query.data.split('_')[1]
-        if mission in ['tapown', 'kross', 'hashgreed']:
-            is_member = True  # Replace with actual membership checking logic.
-            if is_member:
-                rewards = {
-                    'tapown': 10000,
-                    'kross': 15000,
-                    'hashgreed': 15000
-                }
-                existing_user['balance'] += rewards[mission]
-                save_user(existing_user)
-                update_stats()
-                await query.edit_message_text(text=f"Mission Accomplished! You have been rewarded {rewards[mission]} OWN tokens.")
-            else:
-                await query.edit_message_text(text="Mission not done yet, kindly attempt to join.")
-        elif mission in ['x_kross', 'x_hashgreed']:
-            # Record the time of the request to check membership after 24 hours
-            cursor.execute('''
-                INSERT OR REPLACE INTO missions (user_id, mission_name, completed, last_checked)
-                VALUES (?, ?, ?, ?)
-            ''', (existing_user['user_id'], mission, 0, datetime.now().isoformat()))
-            conn.commit()
-            await query.edit_message_text(text="TapOwn will verify your X follow within 24 hours and send your OWN tokens if confirmed.")
+        is_member = True  # This should be replaced with actual membership checking logic.
+        if is_member:
+            rewards = {
+                'tapown': 15000,
+                'kross': 15000,
+                'hashgreed': 15000,
+                'buccon': 15000
+            }
+            existing_user['balance'] += rewards[mission]
+            save_user(existing_user)
+            update_stats()
+            await query.edit_message_text(text=f"Mission Accomplished! You have been rewarded {rewards[mission]} OWN tokens.")
+        else:
+            await query.edit_message_text(text="Mission not done yet, kindly attempt to join.")
 
 async def check_missions():
     while True:
@@ -278,12 +252,14 @@ async def check_missions():
         for mission in pending_missions:
             user_id, mission_name, completed, last_checked = mission
             if datetime.strptime(last_checked, '%Y-%m-%dT%H:%M:%S.%f') + timedelta(hours=24) <= datetime.now():
-                # Implement the actual checking logic for Twitter follows here
+                # Implement the actual checking logic for Telegram group membership here
                 is_member = True  # Replace with actual membership checking logic
                 if is_member:
                     rewards = {
-                        'x_kross': 75000,
-                        'x_hashgreed': 75000
+                        'tapown': 15000,
+                        'kross': 15000,
+                        'hashgreed': 15000,
+                        'buccon': 15000
                     }
                     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
                     user = cursor.fetchone()
