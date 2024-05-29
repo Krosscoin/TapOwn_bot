@@ -194,7 +194,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute('SELECT value FROM stats WHERE key = "daily_users"')
         daily_users = cursor.fetchone()[0]
         cursor.execute('SELECT value FROM stats WHERE key = "online_players"')
-                online_players = cursor.fetchone()[0]
+        online_players = cursor.fetchone()[0]
 
         stats_text = (
             f"📊 Global Stats 📊\n\n"
@@ -210,7 +210,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
            datetime.strptime(existing_user['boost_last_played'], '%Y-%m-%d').date() < datetime.today().date():
             existing_user['boost_last_played'] = datetime.today().isoformat()
             save_user(existing_user)
-            keyboard = [[InlineKeyboardButton(str(i), callback_data=f'boost_{i}') for i in range(1, 11)]]
+            keyboard = [[InlineKeyboardButton(str(i), callback_data=f'boost_{i}')] for i in range(1, 11)]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text="🔋 Boost Page 🔋\nGuess a number between 1 and 10 to win 300000 OWN tokens.", reply_markup=reply_markup)
         else:
